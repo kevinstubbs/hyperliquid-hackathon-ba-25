@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {Test, console2} from "forge-std/Test.sol";
-import {HypurrFiVault} from "../src/HypurrFiVault.sol";
+import {Hy007FreeVault} from "../src/Hy007FreeVault.sol";
 import {IERC20, IPool} from "../src/interfaces/IPool.sol";
 
-contract HypurrFiVaultTest is Test {
-    HypurrFiVault vault;
+contract Hy007FreeVaultTest is Test {
+    Hy007FreeVault vault;
     IERC20 usdc;
     IPool pool;
     
@@ -106,7 +106,7 @@ contract HypurrFiVaultTest is Test {
         console2.log("USDC address:", usdcAddress);
 
         // Deploy vault
-        vault = new HypurrFiVault(
+        vault = new Hy007FreeVault(
             poolAddress,
             usdcAddress,
             usdcAddress,
@@ -189,7 +189,7 @@ contract HypurrFiVaultTest is Test {
         vault.deposit(depositAmount);
         vm.stopPrank();
 
-        HypurrFiVault.VaultStats memory stats = vault.getVaultStats();
+        Hy007FreeVault.VaultStats memory stats = vault.getVaultStats();
         
         console2.log("Total Collateral:", stats.totalCollateral / 1e8);
         console2.log("Total Debt:", stats.totalDebt / 1e8);
@@ -249,7 +249,7 @@ contract HypurrFiVaultTest is Test {
         vault.deposit(depositAmount);
         vm.stopPrank();
 
-        HypurrFiVault.UserPosition memory position = vault.getUserPosition(user1);
+        Hy007FreeVault.UserPosition memory position = vault.getUserPosition(user1);
         
         assertGt(position.shares, 0, "Should have shares");
         assertGt(position.collateralValue, 0, "Should have collateral");

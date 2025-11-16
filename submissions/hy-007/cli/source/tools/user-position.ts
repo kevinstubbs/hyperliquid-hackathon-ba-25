@@ -17,7 +17,7 @@ const VAULT_ABI = [
 					{internalType: 'uint256', name: 'currentLTV', type: 'uint256'},
 					{internalType: 'uint256', name: 'leverageRatio', type: 'uint256'},
 				],
-				internalType: 'struct HypurrFiVault.UserPosition',
+				internalType: 'struct Hy007FreeVault.UserPosition',
 				name: 'position',
 				type: 'tuple',
 			},
@@ -39,7 +39,7 @@ type UserPosition = {
 };
 
 /**
- * Tool: Get user position from HypurrFiVault
+ * Tool: Get user position from Hy007FreeVault
  * Fetches the user's position data from the vault contract
  */
 export async function getUserPosition(

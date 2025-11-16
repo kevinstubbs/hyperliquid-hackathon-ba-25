@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {HypurrFiVault} from "../src/HypurrFiVault.sol";
+import {Hy007FreeVault} from "../src/Hy007FreeVault.sol";
 import {IERC20} from "../src/interfaces/IPool.sol";
 
 contract DeployScript is Script {
-    function run() external returns (HypurrFiVault) {
+    function run() external returns (Hy007FreeVault) {
         // Load environment variables
         address poolAddress = vm.envAddress("POOL_ADDRESS");
         address usdcAddress = vm.envAddress("USDC_ADDRESS");
@@ -21,7 +21,7 @@ contract DeployScript is Script {
         }
 
         console2.log("============================================================");
-        console2.log("Deploying HypurrFiVault");
+        console2.log("Deploying Hy007FreeVault");
         console2.log("============================================================");
         console2.log("Pool Address:", poolAddress);
         console2.log("USDC Address:", usdcAddress);
@@ -39,7 +39,7 @@ contract DeployScript is Script {
 
         // Deploy vault
         console2.log("Deploying vault contract...");
-        HypurrFiVault vault = new HypurrFiVault(
+        Hy007FreeVault vault = new Hy007FreeVault(
             poolAddress,
             usdcAddress,      // depositAsset
             usdcAddress,      // borrowAsset (same asset for simplicity)
@@ -49,7 +49,7 @@ contract DeployScript is Script {
 
         // Log vault address immediately after deployment (before stopBroadcast)
         // This ensures we have the address even if something fails later
-        console2.log("HypurrFiVault deployed at:", address(vault));
+        console2.log("Hy007FreeVault deployed at:", address(vault));
         console2.log("");
 
         vm.stopBroadcast();

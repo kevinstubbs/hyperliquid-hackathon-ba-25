@@ -132,7 +132,7 @@ else
 fi
 
 # Step 3: Deploy the vault
-echo -e "${YELLOW}Step 3: Deploying HypurrFiVault...${NC}"
+echo -e "${YELLOW}Step 3: Deploying Hy007FreeVault...${NC}"
 export TEST_USER="$TEST_USER"
 
 # Use the test user as the sender (deployer) - this is the first anvil account by default

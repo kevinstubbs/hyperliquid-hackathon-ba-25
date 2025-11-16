@@ -12,7 +12,7 @@ export const getTools = (hasUserAddress: boolean, hasPrivateKey: boolean) => [
 		? [
 			{
 				name: 'get_user_position',
-				description: 'CHECK BALANCE: Gets the user\'s CURRENT position in the HypurrFiVault by querying live blockchain data. Returns shares, collateral, debt, health factor, LTV, and leverage ratio. This is a READ-ONLY query - it does not perform any actions. ALWAYS use this tool to check the user\'s current position status - never rely on chat history or assumptions. If shares are 0, the user has no position.',
+				description: 'CHECK BALANCE: Gets the user\'s CURRENT position in the Hy007FreeVault by querying live blockchain data. Returns shares, collateral, debt, health factor, LTV, and leverage ratio. This is a READ-ONLY query - it does not perform any actions. ALWAYS use this tool to check the user\'s current position status - never rely on chat history or assumptions. If shares are 0, the user has no position.',
 				input_schema: {
 					type: 'object' as const,
 					properties: {},

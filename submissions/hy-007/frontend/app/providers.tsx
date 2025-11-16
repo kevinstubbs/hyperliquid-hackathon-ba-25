@@ -8,7 +8,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 import { ReactNode } from 'react';
 
 const config = getDefaultConfig({
-  appName: 'HypurrFi Vault',
+  appName: 'HY-007',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'YOUR_PROJECT_ID',
   chains: [localhost],
   transports: {

@@ -37,7 +37,7 @@ export const VAULT_ABI = [
         {"internalType": "uint256", "name": "currentLTV", "type": "uint256"},
         {"internalType": "uint256", "name": "leverageRatio", "type": "uint256"}
       ],
-      "internalType": "struct HypurrFiVault.UserPosition",
+      "internalType": "struct Hy007FreeVault.UserPosition",
       "name": "position",
       "type": "tuple"
     }],
@@ -58,7 +58,7 @@ export const VAULT_ABI = [
         {"internalType": "address", "name": "collateralAsset", "type": "address"},
         {"internalType": "address", "name": "borrowAsset", "type": "address"}
       ],
-      "internalType": "struct HypurrFiVault.VaultStats",
+      "internalType": "struct Hy007FreeVault.VaultStats",
       "name": "stats",
       "type": "tuple"
     }],

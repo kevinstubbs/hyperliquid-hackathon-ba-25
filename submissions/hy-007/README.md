@@ -251,7 +251,7 @@ If health factor gets low or LTV drifts, click "Rebalance" to adjust position ba
 ## Contract Architecture
 
 ```
-HypurrFiVault
+Hy007FreeVault
 ├── deposit()           - Deposit assets and receive shares
 ├── withdraw()          - Withdraw assets by burning shares
 ├── withdrawAll()       - Full exit from vault
@@ -281,7 +281,7 @@ HypurrFiVault
 
 ### Modify Strategy Parameters
 
-Edit in `HypurrFiVault.sol`:
+Edit in `Hy007FreeVault.sol`:
 ```solidity
 uint256 public targetLTV = 7000;  // 70%
 uint256 public maxLTV = 7500;     // 75%

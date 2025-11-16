@@ -150,7 +150,7 @@ Verify:
 ## 📚 Next Steps
 
 - Read full [README.md](README.md)
-- Explore contract in `foundry/src/HypurrFiVault.sol`
+- Explore contract in `foundry/src/Hy007FreeVault.sol`
 - Customize parameters (LTV, fees)
 - Add your own features
 

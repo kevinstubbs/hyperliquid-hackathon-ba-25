@@ -138,9 +138,9 @@ export default function Home() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
               <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">
-                🏦 HypurrFi Vault
+                HY-007
               </h1>
-              <p className="text-gray-600">Leveraged Yield Strategy</p>
+              <p className="text-gray-600">Agent-managed leverage yield strategy</p>
             </div>
             <ConnectButton />
           </div>

@@ -1,6 +1,7 @@
 {
-	"name": "cli",
+	"name": "hy-007-cli",
 	"version": "0.0.0",
+  "author": "Kevin Stubbs <kevin@pubgenius.io>",
 	"license": "MIT",
 	"bin": "dist/cli.js",
 	"type": "module",

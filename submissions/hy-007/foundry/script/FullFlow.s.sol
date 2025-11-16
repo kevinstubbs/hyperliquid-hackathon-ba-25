@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {HypurrFiVault} from "../src/HypurrFiVault.sol";
+import {Hy007FreeVault} from "../src/Hy007FreeVault.sol";
 import {IERC20, IPool} from "../src/interfaces/IPool.sol";
 
 contract FullFlowScript is Script {
@@ -34,9 +34,9 @@ contract FullFlowScript is Script {
         console2.log("");
         
         // Step 2: Deploy vault
-        console2.log("STEP 2: Deploying HypurrFiVault");
+        console2.log("STEP 2: Deploying Hy007FreeVault");
         console2.log("------------------------------------------------------------");
-        HypurrFiVault vault = new HypurrFiVault(
+        Hy007FreeVault vault = new Hy007FreeVault(
             poolAddress,
             usdcAddress,
             usdcAddress,
@@ -61,7 +61,7 @@ contract FullFlowScript is Script {
         console2.log("Received shares:", shares / 1e18);
         
         // Show position
-        HypurrFiVault.UserPosition memory position1 = vault.getUserPosition(user);
+        Hy007FreeVault.UserPosition memory position1 = vault.getUserPosition(user);
         console2.log("User shares:", position1.shares / 1e18);
         console2.log("Net value: $", position1.netValue / 1e6);
         console2.log("Health factor:", position1.healthFactor / 1e18);
@@ -78,7 +78,7 @@ contract FullFlowScript is Script {
         console2.log("New timestamp:", block.timestamp);
         
         // Show updated position
-        HypurrFiVault.UserPosition memory position2 = vault.getUserPosition(user);
+        Hy007FreeVault.UserPosition memory position2 = vault.getUserPosition(user);
         console2.log("User shares:", position2.shares / 1e18);
         console2.log("Net value: $", position2.netValue / 1e6);
         console2.log("Health factor:", position2.healthFactor / 1e18);
@@ -89,7 +89,7 @@ contract FullFlowScript is Script {
         console2.log("------------------------------------------------------------");
         
         // Check if rebalance is needed
-        HypurrFiVault.VaultStats memory statsBefore = vault.getVaultStats();
+        Hy007FreeVault.VaultStats memory statsBefore = vault.getVaultStats();
         uint256 currentLTV = vault.currentLTV();
         console2.log("Current LTV:", currentLTV / 100, "%");
         console2.log("Health factor before:", statsBefore.healthFactor / 1e18);
@@ -101,12 +101,12 @@ contract FullFlowScript is Script {
             console2.log("Rebalance skipped - position is healthy");
         }
         
-        HypurrFiVault.VaultStats memory stats1 = vault.getVaultStats();
+        Hy007FreeVault.VaultStats memory stats1 = vault.getVaultStats();
         console2.log("Vault health factor:", stats1.healthFactor / 1e18);
         console2.log("Total collateral: $", stats1.totalCollateral / 1e8);
         console2.log("Total debt: $", stats1.totalDebt / 1e8);
         
-        HypurrFiVault.UserPosition memory position3 = vault.getUserPosition(user);
+        Hy007FreeVault.UserPosition memory position3 = vault.getUserPosition(user);
         console2.log("User net value after rebalance: $", position3.netValue / 1e6);
         console2.log("");
         
@@ -118,7 +118,7 @@ contract FullFlowScript is Script {
         console2.log("New timestamp:", block.timestamp);
         
         // Show updated position
-        HypurrFiVault.UserPosition memory position4 = vault.getUserPosition(user);
+        Hy007FreeVault.UserPosition memory position4 = vault.getUserPosition(user);
         console2.log("User shares:", position4.shares / 1e18);
         console2.log("Net value: $", position4.netValue / 1e6);
         console2.log("Health factor:", position4.healthFactor / 1e18);
@@ -150,7 +150,7 @@ contract FullFlowScript is Script {
         // Final stats
         console2.log("FINAL VAULT STATS:");
         console2.log("------------------------------------------------------------");
-        HypurrFiVault.VaultStats memory finalStats = vault.getVaultStats();
+        Hy007FreeVault.VaultStats memory finalStats = vault.getVaultStats();
         console2.log("Total shares:", finalStats.totalShares / 1e18);
         console2.log("Total assets: $", finalStats.totalAssets / 1e6);
         console2.log("Total collateral: $", finalStats.totalCollateral / 1e8);

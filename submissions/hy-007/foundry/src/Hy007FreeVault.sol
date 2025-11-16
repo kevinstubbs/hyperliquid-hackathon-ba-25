@@ -5,11 +5,11 @@ import {IERC20} from "./interfaces/IPool.sol";
 import {IPool} from "./interfaces/IPool.sol";
 
 /**
- * @title HypurrFiVault
+ * @title Hy007FreeVault
  * @notice Leveraged yield vault that uses HypurrFi's lending protocol
  * @dev Implements one-click leverage looping strategy
  */
-contract HypurrFiVault {
+contract Hy007FreeVault {
     // Reentrancy guard
     uint256 private _status;
     uint256 private constant _NOT_ENTERED = 1;

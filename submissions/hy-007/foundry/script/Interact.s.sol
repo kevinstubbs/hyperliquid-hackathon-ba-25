@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {HypurrFiVault} from "../src/HypurrFiVault.sol";
+import {Hy007FreeVault} from "../src/Hy007FreeVault.sol";
 import {IERC20} from "../src/interfaces/IPool.sol";
 
 contract InteractScript is Script {
@@ -10,7 +10,7 @@ contract InteractScript is Script {
         address vaultAddress = vm.envAddress("VAULT_ADDRESS");
         address user = msg.sender;
         
-        HypurrFiVault vault = HypurrFiVault(vaultAddress);
+        Hy007FreeVault vault = Hy007FreeVault(vaultAddress);
 
         console2.log("============================================================");
         console2.log("HypurrFi Vault - Position Viewer");
@@ -23,7 +23,7 @@ contract InteractScript is Script {
         console2.log("YOUR POSITION:");
         console2.log("------------------------------------------------------------");
         
-        HypurrFiVault.UserPosition memory position = vault.getUserPosition(user);
+        Hy007FreeVault.UserPosition memory position = vault.getUserPosition(user);
         
         if (position.shares == 0) {
             console2.log("No position found. Deposit to get started!");
@@ -42,7 +42,7 @@ contract InteractScript is Script {
         console2.log("VAULT STATISTICS:");
         console2.log("------------------------------------------------------------");
         
-        HypurrFiVault.VaultStats memory stats = vault.getVaultStats();
+        Hy007FreeVault.VaultStats memory stats = vault.getVaultStats();
         console2.log("Total Shares:", stats.totalShares / 1e18);
         console2.log("Total Assets: $", stats.totalAssets / 1e6);
         console2.log("Total Collateral: $", stats.totalCollateral / 1e8);
@@ -62,7 +62,7 @@ contract InteractScript is Script {
         vm.startBroadcast();
 
         IERC20(usdcAddress).approve(vaultAddress, amount);
-        uint256 shares = HypurrFiVault(vaultAddress).deposit(amount);
+        uint256 shares = Hy007FreeVault(vaultAddress).deposit(amount);
 
         vm.stopBroadcast();
 
@@ -75,7 +75,7 @@ contract InteractScript is Script {
         
         vm.startBroadcast();
 
-        uint256 assets = HypurrFiVault(vaultAddress).withdraw(shareAmount);
+        uint256 assets = Hy007FreeVault(vaultAddress).withdraw(shareAmount);
 
         vm.stopBroadcast();
 
@@ -87,7 +87,7 @@ contract InteractScript is Script {
         
         vm.startBroadcast();
 
-        uint256 assets = HypurrFiVault(vaultAddress).withdrawAll();
+        uint256 assets = Hy007FreeVault(vaultAddress).withdrawAll();
 
         vm.stopBroadcast();
 

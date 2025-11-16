@@ -1,7 +1,8 @@
 {
-  "name": "hypurrfi-vault-frontend",
+  "name": "hy-007-frontend",
   "version": "0.1.0",
   "private": true,
+  "author": "Kevin Stubbs <kevin@pubgenius.io>",
   "scripts": {
     "dev": "next dev",
     "build": "next build --webpack",
