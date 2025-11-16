@@ -74,7 +74,7 @@ export async function withdrawAll(
 			results.push('');
 			results.push('Full withdrawal completed successfully!');
 			results.push(`User address: ${userAddress}`);
-			results.push('All shares have been withdrawn and underlying assets returned (minus withdrawal fee).');
+			results.push('All shares have been withdrawn and underlying assets returned.');
 
 			return results.join('\n');
 		} catch (error) {

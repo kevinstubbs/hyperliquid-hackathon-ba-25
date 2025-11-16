@@ -13,7 +13,6 @@ contract FullFlowScript is Script {
         
         // Get the first test account (anvil's first account)
         address user = msg.sender; // First anvil account (0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
-        address treasury = vm.addr(1); // Second anvil account as treasury
         
         console2.log("============================================================");
         console2.log("Full Flow Test Script");
@@ -40,8 +39,7 @@ contract FullFlowScript is Script {
             poolAddress,
             usdcAddress,
             usdcAddress,
-            address(0),
-            treasury
+            address(0)
         );
         console2.log("Vault deployed at:", address(vault));
         console2.log("");

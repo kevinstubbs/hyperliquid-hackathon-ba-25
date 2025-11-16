@@ -12,7 +12,6 @@ contract Hy007FreeVaultTest is Test {
     
     address user1 = address(0x1);
     address user2 = address(0x2);
-    address treasury = address(0x3);
     address owner = address(this); // Test contract is owner
 
     // Fork setup
@@ -110,8 +109,7 @@ contract Hy007FreeVaultTest is Test {
             poolAddress,
             usdcAddress,
             usdcAddress,
-            address(0),
-            treasury
+            address(0)
         );
 
         console2.log("Vault deployed at:", address(vault));
@@ -328,12 +326,6 @@ contract Hy007FreeVaultTest is Test {
         vault.setMaxLTV(8000);
         assertEq(vault.maxLTV(), 8000, "Max LTV should be updated");
         vault.setMaxLTV(oldMax); // Restore
-        
-        // Test setWithdrawalFee
-        uint256 oldFee = vault.withdrawalFee();
-        vault.setWithdrawalFee(100);
-        assertEq(vault.withdrawalFee(), 100, "Withdrawal fee should be updated");
-        vault.setWithdrawalFee(oldFee); // Restore
         
         // Test transferOwnership
         address newOwner = address(0x999);

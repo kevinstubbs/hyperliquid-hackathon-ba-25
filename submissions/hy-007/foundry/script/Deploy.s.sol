@@ -10,7 +10,6 @@ contract DeployScript is Script {
         // Load environment variables
         address poolAddress = vm.envAddress("POOL_ADDRESS");
         address usdcAddress = vm.envAddress("USDC_ADDRESS");
-        address treasury = msg.sender; // Use deployer as treasury
         
         // Get test user address (optional env var, defaults to msg.sender)
         address testUser;
@@ -25,7 +24,6 @@ contract DeployScript is Script {
         console2.log("============================================================");
         console2.log("Pool Address:", poolAddress);
         console2.log("USDC Address:", usdcAddress);
-        console2.log("Treasury:", treasury);
         console2.log("Test User:", testUser);
         console2.log("");
 
@@ -43,8 +41,7 @@ contract DeployScript is Script {
             poolAddress,
             usdcAddress,      // depositAsset
             usdcAddress,      // borrowAsset (same asset for simplicity)
-            address(0),       // hyToken (can be obtained from pool if needed)
-            treasury
+            address(0)        // hyToken (can be obtained from pool if needed)
         );
 
         // Log vault address immediately after deployment (before stopBroadcast)

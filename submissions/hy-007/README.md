@@ -245,8 +245,6 @@ If health factor gets low or LTV drifts, click "Rebalance" to adjust position ba
 - **Target LTV**: 70%
 - **Max LTV**: 75%
 - **Min Health Factor**: 1.15
-- **Withdrawal Fee**: 0.5%
-- **Performance Fee**: 10%
 
 ## Contract Architecture
 

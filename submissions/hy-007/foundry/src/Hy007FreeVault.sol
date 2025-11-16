@@ -49,7 +49,6 @@ contract Hy007FreeVault {
     IERC20 public immutable depositAsset;
     IERC20 public immutable borrowAsset;
     address public immutable hyToken;
-    address public immutable treasury;
     address public owner;
 
     uint256 public targetLTV = 7000;  // 70%
@@ -61,10 +60,7 @@ contract Hy007FreeVault {
     uint256 public constant WITHDRAWAL_SLIPPAGE_TOLERANCE = 200;  // 2% tolerance for withdrawals
     uint256 public constant BORROW_SAFETY_BUFFER = 200;  // 2% safety buffer on borrows to prevent HF issues
     uint256 public constant DEBT_REPAY_BUFFER = 300;  // 3% buffer for debt repayment to account for interest accrual
-
-    uint256 public performanceFee = 1000;  // 10% - Reserved for future use (not currently collected)
-    uint256 public withdrawalFee = 50;     // 0.5%
-    uint256 public constant FEE_PRECISION = 10000;
+    uint256 public constant FEE_PRECISION = 10000;  // Used for slippage tolerance calculations
 
     mapping(address => uint256) public shares;
     uint256 public totalShares;
@@ -73,32 +69,27 @@ contract Hy007FreeVault {
 
     // Events
     event Deposited(address indexed user, uint256 assets, uint256 shares);
-    event Withdrawn(address indexed user, uint256 assets, uint256 shares, uint256 fee);
+    event Withdrawn(address indexed user, uint256 assets, uint256 shares);
     event Rebalanced(uint256 newLTV, uint256 healthFactor);
     event EmergencyExit(uint256 timestamp);
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-    event TreasuryUpdated(address indexed newTreasury);
     event TargetLTVUpdated(uint256 newTargetLTV);
     event MaxLTVUpdated(uint256 newMaxLTV);
-    event WithdrawalFeeUpdated(uint256 newFee);
 
     constructor(
         address _pool,
         address _depositAsset,
         address _borrowAsset,
-        address _hyToken,
-        address _treasury
+        address _hyToken
     ) {
         require(_pool != address(0), "Pool cannot be zero address");
         require(_depositAsset != address(0), "Deposit asset cannot be zero address");
         require(_borrowAsset != address(0), "Borrow asset cannot be zero address");
-        require(_treasury != address(0), "Treasury cannot be zero address");
 
         pool = IPool(_pool);
         depositAsset = IERC20(_depositAsset);
         borrowAsset = IERC20(_borrowAsset);
         hyToken = _hyToken;
-        treasury = _treasury;
         owner = msg.sender;
         _status = _NOT_ENTERED;
 
@@ -153,18 +144,14 @@ contract Hy007FreeVault {
     /**
      * @notice Withdraw assets by burning shares
      * @param userShares Amount of shares to burn
-     * @return assets Amount of assets returned (after fees)
+     * @return assets Amount of assets returned
      */
     function withdraw(uint256 userShares) external nonReentrant returns (uint256 assets) {
         require(userShares > 0, "Cannot withdraw 0");
         require(shares[msg.sender] >= userShares, "Insufficient shares");
 
-        // Calculate assets before fees (must do before burning shares)
-        uint256 assetsBeforeFee = convertToAssets(userShares);
-
-        // Calculate withdrawal fee
-        uint256 fee = (assetsBeforeFee * withdrawalFee) / FEE_PRECISION;
-        uint256 expectedAssets = assetsBeforeFee - fee;
+        // Calculate assets to withdraw (must do before burning shares)
+        uint256 expectedAssets = convertToAssets(userShares);
 
         // Burn shares (CEI pattern)
         shares[msg.sender] -= userShares;
@@ -174,7 +161,7 @@ contract Hy007FreeVault {
         uint256 balanceBefore = depositAsset.balanceOf(address(this));
 
         // Unwind leveraged position
-        _unwindPosition(assetsBeforeFee);
+        _unwindPosition(expectedAssets);
 
         // Get actual balance after unwind
         uint256 balanceAfter = depositAsset.balanceOf(address(this));
@@ -193,22 +180,13 @@ contract Hy007FreeVault {
             revert("Withdrawal failed - insufficient liquidity");
         }
 
-        // Send fee to treasury (proportional to what we actually got)
-        if (fee > 0 && assets > 0) {
-            uint256 actualFee = (assets * withdrawalFee) / (FEE_PRECISION - withdrawalFee);
-            if (actualFee > 0 && actualFee < assets) {
-                _safeTransfer(depositAsset, treasury, actualFee);
-                assets = assets - actualFee;
-            }
-        }
-
         // Transfer assets to user
         if (assets > 0) {
-        _safeTransfer(depositAsset, msg.sender, assets);
-        totalWithdrawn += assets;
+            _safeTransfer(depositAsset, msg.sender, assets);
+            totalWithdrawn += assets;
         }
 
-        emit Withdrawn(msg.sender, assets, userShares, fee);
+        emit Withdrawn(msg.sender, assets, userShares);
     }
 
     /**
@@ -219,12 +197,8 @@ contract Hy007FreeVault {
         uint256 userShares = shares[msg.sender];
         require(userShares > 0, "No shares to withdraw");
         
-        // Calculate assets before fees (must do before burning shares)
-        uint256 assetsBeforeFee = convertToAssets(userShares);
-        
-        // Calculate withdrawal fee
-        uint256 fee = (assetsBeforeFee * withdrawalFee) / FEE_PRECISION;
-        uint256 expectedAssets = assetsBeforeFee - fee;
+        // Calculate assets to withdraw (must do before burning shares)
+        uint256 expectedAssets = convertToAssets(userShares);
         
         // Burn shares (CEI pattern)
         shares[msg.sender] = 0;
@@ -234,7 +208,7 @@ contract Hy007FreeVault {
         uint256 balanceBefore = depositAsset.balanceOf(address(this));
         
         // Unwind leveraged position
-        _unwindPosition(assetsBeforeFee);
+        _unwindPosition(expectedAssets);
         
         // Get actual balance after unwind
         uint256 balanceAfter = depositAsset.balanceOf(address(this));
@@ -287,34 +261,23 @@ contract Hy007FreeVault {
                 revert("Withdrawal failed - insufficient liquidity");
             }
         }
-
-        // Send fee to treasury (proportional to what we actually got)
-        if (fee > 0 && assets > 0) {
-            uint256 actualFee = (assets * withdrawalFee) / (FEE_PRECISION - withdrawalFee);
-            if (actualFee > 0 && actualFee < assets) {
-                _safeTransfer(depositAsset, treasury, actualFee);
-                assets = assets - actualFee;
-            }
-        }
         
         // Transfer assets to user
         if (assets > 0) {
-        _safeTransfer(depositAsset, msg.sender, assets);
-        totalWithdrawn += assets;
+            _safeTransfer(depositAsset, msg.sender, assets);
+            totalWithdrawn += assets;
         }
         
-        emit Withdrawn(msg.sender, assets, userShares, fee);
+        emit Withdrawn(msg.sender, assets, userShares);
     }
 
     /**
      * @notice Preview withdrawal amount
      * @param userShares Amount of shares to withdraw
-     * @return assets Amount of assets you'd receive (after fees)
+     * @return assets Amount of assets you'd receive
      */
     function previewWithdraw(uint256 userShares) external view returns (uint256 assets) {
-        uint256 assetsBeforeFee = convertToAssets(userShares);
-        uint256 fee = (assetsBeforeFee * withdrawalFee) / FEE_PRECISION;
-        return assetsBeforeFee - fee;
+        return convertToAssets(userShares);
     }
 
     // ========================================
@@ -801,12 +764,6 @@ contract Hy007FreeVault {
         require(newMaxLTV < LTV_PRECISION, "Max LTV must be < 100%");
         maxLTV = newMaxLTV;
         emit MaxLTVUpdated(newMaxLTV);
-    }
-
-    function setWithdrawalFee(uint256 newFee) external onlyOwner {
-        require(newFee <= 1000, "Withdrawal fee cannot exceed 10%");
-        withdrawalFee = newFee;
-        emit WithdrawalFeeUpdated(newFee);
     }
 
     // ========================================
