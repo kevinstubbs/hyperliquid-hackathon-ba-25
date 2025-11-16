@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'dotenv/config';
 import React from 'react';
 import {render} from 'ink';
 import meow from 'meow';
@@ -10,20 +11,49 @@ const cli = meow(
 	  $ cli
 
 	Options
-		--name  Your name
+		--api-key       Anthropic API key (or set ANTHROPIC_API_KEY env var)
+		--user-address  Your wallet address (or set USER_ADDRESS env var)
+		--vault-address Vault contract address (or set VAULT_ADDRESS env var)
+		--rpc-url       RPC URL for blockchain (or set RPC_URL env var)
+		--usdc-address  USDC token address (or set USDC_ADDRESS env var)
 
 	Examples
-	  $ cli --name=Jane
-	  Hello, Jane
+	  $ cli
+	  $ cli --api-key=sk-ant-... --user-address=0x...
+	  $ cli --user-address=0x... --vault-address=0x...
 `,
 	{
 		importMeta: import.meta,
 		flags: {
-			name: {
+			apiKey: {
+				type: 'string',
+				alias: 'k',
+			},
+			userAddress: {
+				type: 'string',
+				alias: 'u',
+			},
+			vaultAddress: {
+				type: 'string',
+				alias: 'v',
+			},
+			rpcUrl: {
+				type: 'string',
+				alias: 'r',
+			},
+			usdcAddress: {
 				type: 'string',
 			},
 		},
 	},
 );
 
-render(<App name={cli.flags.name} />);
+render(
+	<App
+		apiKey={cli.flags.apiKey}
+		userAddress={cli.flags.userAddress}
+		vaultAddress={cli.flags.vaultAddress}
+		rpcUrl={cli.flags.rpcUrl}
+		usdcAddress={cli.flags.usdcAddress}
+	/>,
+);

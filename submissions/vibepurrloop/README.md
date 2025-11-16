@@ -71,7 +71,7 @@ npm install
 export HYPERLIQUID_RPC_URL=https://rpc.hyperliquid-testnet.xyz/evm
 # main: 999
 # test: 998
-anvil --chain-id 999 --fork-url https://rpc.hyperliquid.xyz/evm --fork-block-number 37736779 
+anvil --chain-id 1337 --fork-url https://rpc.hyperliquid.xyz/evm 
 ```
 
 ### 4. Deploy Contracts (in new terminal)
@@ -101,19 +101,99 @@ Visit http://localhost:3000
 
 ## Testing
 
-### Run Contract Tests on Fork
+### Run Contract Tests on Mainnet Fork
+
+There are several ways to run tests against a mainnet fork:
+
+#### Method 1: Using RPC Endpoint Name (Recommended)
+
+Since `foundry.toml` already defines the `hyperliquid` RPC endpoint, you can use it directly:
+
+```bash
+cd foundry
+# Set required environment variables
+export HYPERLIQUID_RPC_URL=https://rpc.hyperliquid.xyz/evm
+export POOL_ADDRESS=0x...  # HypurrFi Pool contract address
+export USDC_ADDRESS=0x...  # USDC token address
+
+# Run tests
+forge test --fork-url hyperliquid -vvv
+```
+
+**Important:** You must set `POOL_ADDRESS` and `USDC_ADDRESS` environment variables. The test will fail with a clear error message if they're missing.
+
+#### Method 2: Using Direct RPC URL
 
 ```bash
 cd foundry
 export HYPERLIQUID_RPC_URL=https://rpc.hyperliquid.xyz/evm
+export POOL_ADDRESS=0x...  # Required
+export USDC_ADDRESS=0x...  # Required
 forge test --fork-url $HYPERLIQUID_RPC_URL -vvv
+```
+
+Or inline:
+```bash
+export POOL_ADDRESS=0x...
+export USDC_ADDRESS=0x...
+forge test --fork-url https://rpc.hyperliquid.xyz/evm -vvv
+```
+
+#### Using .env File
+
+You can also create a `.env` file in the `foundry/` directory:
+
+```bash
+# foundry/.env
+HYPERLIQUID_RPC_URL=https://rpc.hyperliquid.xyz/evm
+POOL_ADDRESS=0x...
+USDC_ADDRESS=0x...
+```
+
+Then load it when running tests:
+```bash
+cd foundry
+source .env  # Load environment variables
+forge test --fork-url hyperliquid -vvv
+```
+
+#### Method 3: Fork at Specific Block Number
+
+To test against a specific block (useful for reproducibility):
+
+```bash
+cd foundry
+export HYPERLIQUID_RPC_URL=https://rpc.hyperliquid.xyz/evm
+forge test --fork-url $HYPERLIQUID_RPC_URL --fork-block-number 37736779 -vvv
+```
+
+#### Method 4: Using Foundry's RPC Endpoint Name
+
+If you have the RPC URL set in your environment, you can reference it by name:
+
+```bash
+cd foundry
+# Make sure HYPERLIQUID_RPC_URL is set in your environment
+forge test --fork-url hyperliquid -vvv
 ```
 
 ### Run Specific Test
 
 ```bash
-forge test --match-test testDeposit -vvv
+# Run a specific test function
+forge test --fork-url hyperliquid --match-test testDeposit -vvv
+
+# Run tests matching a pattern
+forge test --fork-url hyperliquid --match-test "test*" -vvv
 ```
+
+### Verbosity Levels
+
+- `-v` - Show test results
+- `-vv` - Show logs for failing tests
+- `-vvv` - Show logs for all tests
+- `-vvvv` - Show traces for failing tests
+- `-vvvvv` - Show traces for all tests
 
 ### View Position via CLI
 

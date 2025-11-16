@@ -23,7 +23,7 @@ forge install foundryrs/forge-std --no-commit
 
 # Install frontend
 cd ../frontend
-npm install
+pnpm i
 ```
 
 ### Step 3: Start Local Fork
@@ -84,9 +84,40 @@ You should see the vault interface. Try:
 
 ## 🧪 Running Tests
 
+### Run Tests Against Mainnet Fork
+
+**Important:** You must set `POOL_ADDRESS` and `USDC_ADDRESS` environment variables before running tests.
+
 ```bash
 cd foundry
+# Set required environment variables
+export HYPERLIQUID_RPC_URL=https://rpc.hyperliquid.xyz/evm
+export POOL_ADDRESS=0x...  # HypurrFi Pool contract address
+export USDC_ADDRESS=0x...  # USDC token address
+
+# Run tests
+forge test --fork-url hyperliquid -vvv
+```
+
+Or use the RPC URL directly:
+```bash
+export POOL_ADDRESS=0x...
+export USDC_ADDRESS=0x...
 forge test --fork-url $HYPERLIQUID_RPC_URL -vvv
+```
+
+**Note:** If environment variables are not set, the test will fail with a clear error message explaining what's missing.
+
+### Fork at Specific Block (for reproducibility)
+
+```bash
+forge test --fork-url $HYPERLIQUID_RPC_URL --fork-block-number 37736779 -vvv
+```
+
+### Run Specific Test
+
+```bash
+forge test --fork-url hyperliquid --match-test testDeposit -vvv
 ```
 
 ## 📊 View Position via CLI

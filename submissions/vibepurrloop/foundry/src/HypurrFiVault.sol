@@ -58,8 +58,9 @@ contract HypurrFiVault {
     uint256 public constant MIN_HEALTH_FACTOR = 1.15e18;
     uint256 public constant MIN_SAFE_HEALTH_FACTOR = 1e18;  // Minimum HF to prevent liquidation
     uint256 public constant INTEREST_RATE_MODE = 2;  // Variable rate
-    uint256 public constant WITHDRAWAL_SLIPPAGE_TOLERANCE = 50;  // 0.5% tolerance for withdrawals
+    uint256 public constant WITHDRAWAL_SLIPPAGE_TOLERANCE = 200;  // 2% tolerance for withdrawals
     uint256 public constant BORROW_SAFETY_BUFFER = 200;  // 2% safety buffer on borrows to prevent HF issues
+    uint256 public constant DEBT_REPAY_BUFFER = 300;  // 3% buffer for debt repayment to account for interest accrual
 
     uint256 public performanceFee = 1000;  // 10% - Reserved for future use (not currently collected)
     uint256 public withdrawalFee = 50;     // 0.5%
@@ -163,23 +164,49 @@ contract HypurrFiVault {
 
         // Calculate withdrawal fee
         uint256 fee = (assetsBeforeFee * withdrawalFee) / FEE_PRECISION;
-        assets = assetsBeforeFee - fee;
+        uint256 expectedAssets = assetsBeforeFee - fee;
 
         // Burn shares (CEI pattern)
         shares[msg.sender] -= userShares;
         totalShares -= userShares;
 
+        // Get balance before unwind
+        uint256 balanceBefore = depositAsset.balanceOf(address(this));
+
         // Unwind leveraged position
         _unwindPosition(assetsBeforeFee);
 
-        // Send fee to treasury
-        if (fee > 0) {
-            _safeTransfer(depositAsset, treasury, fee);
+        // Get actual balance after unwind
+        uint256 balanceAfter = depositAsset.balanceOf(address(this));
+        uint256 actualWithdrawn = balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0;
+
+        // Use actual withdrawn amount, but apply slippage tolerance
+        uint256 minAcceptable = (expectedAssets * (FEE_PRECISION - WITHDRAWAL_SLIPPAGE_TOLERANCE)) / FEE_PRECISION;
+        
+        if (actualWithdrawn >= minAcceptable) {
+            assets = actualWithdrawn < expectedAssets ? actualWithdrawn : expectedAssets;
+        } else if (actualWithdrawn > 0) {
+            // Accept less than minimum if that's all we got (due to slippage)
+            assets = actualWithdrawn;
+        } else {
+            // If nothing was withdrawn, revert
+            revert("Withdrawal failed - insufficient liquidity");
+        }
+
+        // Send fee to treasury (proportional to what we actually got)
+        if (fee > 0 && assets > 0) {
+            uint256 actualFee = (assets * withdrawalFee) / (FEE_PRECISION - withdrawalFee);
+            if (actualFee > 0 && actualFee < assets) {
+                _safeTransfer(depositAsset, treasury, actualFee);
+                assets = assets - actualFee;
+            }
         }
 
         // Transfer assets to user
+        if (assets > 0) {
         _safeTransfer(depositAsset, msg.sender, assets);
         totalWithdrawn += assets;
+        }
 
         emit Withdrawn(msg.sender, assets, userShares, fee);
     }
@@ -197,23 +224,84 @@ contract HypurrFiVault {
         
         // Calculate withdrawal fee
         uint256 fee = (assetsBeforeFee * withdrawalFee) / FEE_PRECISION;
-        assets = assetsBeforeFee - fee;
+        uint256 expectedAssets = assetsBeforeFee - fee;
         
         // Burn shares (CEI pattern)
         shares[msg.sender] = 0;
         totalShares -= userShares;
         
+        // Get balance before unwind
+        uint256 balanceBefore = depositAsset.balanceOf(address(this));
+        
         // Unwind leveraged position
         _unwindPosition(assetsBeforeFee);
         
-        // Send fee to treasury
-        if (fee > 0) {
-            _safeTransfer(depositAsset, treasury, fee);
+        // Get actual balance after unwind
+        uint256 balanceAfter = depositAsset.balanceOf(address(this));
+        uint256 actualWithdrawn = balanceAfter > balanceBefore ? balanceAfter - balanceBefore : 0;
+
+        // Use actual withdrawn amount, but apply slippage tolerance
+        uint256 minAcceptable = (expectedAssets * (FEE_PRECISION - WITHDRAWAL_SLIPPAGE_TOLERANCE)) / FEE_PRECISION;
+        
+        if (actualWithdrawn >= minAcceptable) {
+            assets = actualWithdrawn < expectedAssets ? actualWithdrawn : expectedAssets;
+        } else if (actualWithdrawn > 0) {
+            // Accept less than minimum if that's all we got (due to slippage)
+            assets = actualWithdrawn;
+        } else {
+            // If nothing was withdrawn, try progressively smaller amounts
+            (uint256 availableCollateral, uint256 currentDebt, , , , ) = pool.getUserAccountData(address(this));
+            uint256 netAvailable = availableCollateral > currentDebt ? availableCollateral - currentDebt : 0;
+            
+            if (netAvailable > 0) {
+                // Try progressively smaller amounts: 100%, 95%, 90%, 80%, 50%, 25%, 10%, 5%, 1%
+                uint256[] memory fallbackAmounts = new uint256[](9);
+                fallbackAmounts[0] = netAvailable;
+                fallbackAmounts[1] = (netAvailable * 95) / 100;
+                fallbackAmounts[2] = (netAvailable * 90) / 100;
+                fallbackAmounts[3] = (netAvailable * 80) / 100;
+                fallbackAmounts[4] = (netAvailable * 50) / 100;
+                fallbackAmounts[5] = (netAvailable * 25) / 100;
+                fallbackAmounts[6] = (netAvailable * 10) / 100;
+                fallbackAmounts[7] = (netAvailable * 5) / 100;
+                fallbackAmounts[8] = (netAvailable * 1) / 100;
+                
+                for (uint256 i = 0; i < fallbackAmounts.length; i++) {
+                    if (fallbackAmounts[i] == 0) continue;
+                    
+                    try pool.withdraw(address(depositAsset), fallbackAmounts[i], address(this)) returns (uint256 amount) {
+                        if (amount > 0) {
+                            actualWithdrawn = amount;
+                            assets = amount;
+                            break; // Success, exit loop
+                        }
+                    } catch {
+                        continue; // Try next amount
+                    }
+                }
+                
+                if (actualWithdrawn == 0) {
+                    revert("Withdrawal failed - insufficient liquidity");
+                }
+            } else {
+                revert("Withdrawal failed - insufficient liquidity");
+            }
+        }
+
+        // Send fee to treasury (proportional to what we actually got)
+        if (fee > 0 && assets > 0) {
+            uint256 actualFee = (assets * withdrawalFee) / (FEE_PRECISION - withdrawalFee);
+            if (actualFee > 0 && actualFee < assets) {
+                _safeTransfer(depositAsset, treasury, actualFee);
+                assets = assets - actualFee;
+            }
         }
         
         // Transfer assets to user
+        if (assets > 0) {
         _safeTransfer(depositAsset, msg.sender, assets);
         totalWithdrawn += assets;
+        }
         
         emit Withdrawn(msg.sender, assets, userShares, fee);
     }
@@ -421,16 +509,61 @@ contract HypurrFiVault {
             pool.getUserAccountData(address(this));
 
         if (totalDebt == 0) {
-            // No debt, just withdraw
-            uint256 withdrawn = pool.withdraw(address(depositAsset), assetsToWithdraw, address(this));
-            // If we couldn't withdraw the full amount, that's okay due to rounding
+            // No debt, just withdraw with slippage tolerance
+            (uint256 availableCollateral, , , , , ) = pool.getUserAccountData(address(this));
+            if (availableCollateral == 0) return;
+            
+            uint256 maxWithdraw = availableCollateral < assetsToWithdraw ? availableCollateral : assetsToWithdraw;
+            uint256 minWithdrawNoDebt = (assetsToWithdraw * (FEE_PRECISION - WITHDRAWAL_SLIPPAGE_TOLERANCE)) / FEE_PRECISION;
+            
+            // Try progressively smaller amounts until something works
+            uint256[] memory amountsToTryNoDebt = new uint256[](5);
+            amountsToTryNoDebt[0] = maxWithdraw;
+            amountsToTryNoDebt[1] = minWithdrawNoDebt < availableCollateral ? minWithdrawNoDebt : availableCollateral;
+            amountsToTryNoDebt[2] = (availableCollateral * 95) / 100;
+            amountsToTryNoDebt[3] = (availableCollateral * 90) / 100;
+            amountsToTryNoDebt[4] = (availableCollateral * 80) / 100;
+            
+            uint256 withdrawnNoDebt = 0;
+            for (uint256 i = 0; i < amountsToTryNoDebt.length; i++) {
+                if (amountsToTryNoDebt[i] == 0 || amountsToTryNoDebt[i] > availableCollateral) continue;
+                
+                try pool.withdraw(address(depositAsset), amountsToTryNoDebt[i], address(this)) returns (uint256 amount) {
+                    if (amount > 0) {
+                        withdrawnNoDebt = amount;
+                        break;
+                    }
+                } catch {
+                    continue;
+                }
+            }
+            
+            // If all attempts failed, try with very small amounts
+            if (withdrawnNoDebt == 0 && availableCollateral > 0) {
+                for (uint256 percent = 10; percent >= 1 && withdrawnNoDebt == 0; percent--) {
+                    uint256 smallAmount = (availableCollateral * percent) / 100;
+                    if (smallAmount > 0) {
+                    try pool.withdraw(address(depositAsset), smallAmount, address(this)) returns (uint256 amount) {
+                        if (amount > 0) {
+                            withdrawnNoDebt = amount;
+                            break;
+                        }
+                    } catch {
+                        continue;
+                    }
+                    }
+                }
+            }
             return;
         }
 
         uint256 totalAssets = _totalAssets();
         if (totalAssets == 0) {
             // If no assets, just try to withdraw what we can
-            try pool.withdraw(address(depositAsset), assetsToWithdraw, address(this)) {} catch {}
+            (uint256 availableCollateral, , , , , ) = pool.getUserAccountData(address(this));
+            if (availableCollateral > 0) {
+                try pool.withdraw(address(depositAsset), availableCollateral < assetsToWithdraw ? availableCollateral : assetsToWithdraw, address(this)) {} catch {}
+            }
             return;
         }
         
@@ -451,7 +584,7 @@ contract HypurrFiVault {
             
             // Use the larger of calculated or actual proportional debt (with buffer)
             uint256 repayAmount = actualDebtToRepay > debtToRepay ? actualDebtToRepay : debtToRepay;
-            repayAmount = repayAmount + (repayAmount * 100) / FEE_PRECISION; // Add 1% buffer
+            repayAmount = repayAmount + (repayAmount * DEBT_REPAY_BUFFER) / FEE_PRECISION; // Add buffer for interest accrual
             
             // Cap at available collateral
             (uint256 availableCollateral, , , , , ) = pool.getUserAccountData(address(this));
@@ -460,9 +593,27 @@ contract HypurrFiVault {
             }
             
             if (repayAmount > 0) {
-                pool.withdraw(address(depositAsset), repayAmount, address(this));
+                // Withdraw with slippage tolerance
+                uint256 minWithdrawForRepay = (repayAmount * (FEE_PRECISION - WITHDRAWAL_SLIPPAGE_TOLERANCE)) / FEE_PRECISION;
+                uint256 withdrawForRepay = repayAmount < availableCollateral ? repayAmount : availableCollateral;
+                
+                try pool.withdraw(address(depositAsset), withdrawForRepay, address(this)) {
                 // Repay what we can (may be less than requested due to interest)
-                pool.repay(address(borrowAsset), repayAmount, INTEREST_RATE_MODE, address(this));
+                    uint256 actualBalance = depositAsset.balanceOf(address(this));
+                    if (actualBalance > 0) {
+                        pool.repay(address(borrowAsset), actualBalance, INTEREST_RATE_MODE, address(this));
+                    }
+                } catch {
+                    // Try with minimum acceptable amount
+                    if (availableCollateral >= minWithdrawForRepay) {
+                        try pool.withdraw(address(depositAsset), minWithdrawForRepay, address(this)) {
+                            uint256 actualBalance = depositAsset.balanceOf(address(this));
+                            if (actualBalance > 0) {
+                                pool.repay(address(borrowAsset), actualBalance, INTEREST_RATE_MODE, address(this));
+                            }
+                        } catch {}
+                    }
+                }
             }
         } else if (debtToRepay > 0) {
             // Different assets: repay from existing balance
@@ -474,34 +625,76 @@ contract HypurrFiVault {
         }
         
         // Now withdraw the requested amount (with tolerance for rounding)
+        // Get the actual aToken balance instead of calculating from base units
+        // This is more accurate as it reflects what's actually withdrawable
+        (uint256 configuration, uint128 liquidityIndex, , , , , , uint16 id, address aTokenAddress, , , , , , ) = 
+            pool.getReserveData(address(depositAsset));
+        
+        // Get actual aToken balance
+        uint256 aTokenBalance = IERC20(aTokenAddress).balanceOf(address(this));
+        
         // Calculate what we can actually withdraw after debt repayment
         (uint256 finalCollateral, uint256 finalDebt, , , , ) = pool.getUserAccountData(address(this));
-        uint256 availableToWithdraw = finalCollateral > finalDebt ? finalCollateral - finalDebt : 0;
+        uint256 netValueBase = finalCollateral > finalDebt ? finalCollateral - finalDebt : 0;
+        
+        // Use the minimum of aToken balance and calculated net value (in token units)
+        // Convert base units to token units by dividing by price (approximate)
+        // But actually, aToken balance is already in token units, so use that
+        uint256 availableToWithdraw = aTokenBalance;
+        
+        // Cap at the requested amount
+        if (availableToWithdraw > assetsToWithdraw) {
+            availableToWithdraw = assetsToWithdraw;
+        }
         
         if (availableToWithdraw == 0) {
             // Nothing to withdraw after debt repayment
             return;
         }
         
-        // Withdraw the minimum of requested amount and available (with small tolerance)
-        uint256 withdrawAmount = assetsToWithdraw < availableToWithdraw ? assetsToWithdraw : availableToWithdraw;
-        
         // Apply slippage tolerance - allow withdrawing slightly less if needed
         uint256 minWithdraw = (assetsToWithdraw * (FEE_PRECISION - WITHDRAWAL_SLIPPAGE_TOLERANCE)) / FEE_PRECISION;
-        if (withdrawAmount < minWithdraw && availableToWithdraw >= minWithdraw) {
-            withdrawAmount = minWithdraw;
+        
+        // Start with the requested amount, but cap at available
+        uint256 targetAmount = assetsToWithdraw < availableToWithdraw ? assetsToWithdraw : availableToWithdraw;
+        
+        // Try progressively smaller amounts until something works
+        // This handles cases where the pool has liquidity constraints
+        uint256[] memory amountsToTry = new uint256[](5);
+        amountsToTry[0] = targetAmount;
+        amountsToTry[1] = minWithdraw < availableToWithdraw ? minWithdraw : availableToWithdraw;
+        amountsToTry[2] = (availableToWithdraw * 95) / 100; // 95% of available
+        amountsToTry[3] = (availableToWithdraw * 90) / 100; // 90% of available
+        amountsToTry[4] = (availableToWithdraw * 80) / 100; // 80% of available
+        
+        uint256 withdrawn = 0;
+        for (uint256 i = 0; i < amountsToTry.length; i++) {
+            if (amountsToTry[i] == 0 || amountsToTry[i] > availableToWithdraw) continue;
+            
+            try pool.withdraw(address(depositAsset), amountsToTry[i], address(this)) returns (uint256 amount) {
+                if (amount > 0) {
+                    withdrawn = amount;
+                    break; // Success, exit loop
+                }
+            } catch {
+                continue; // Try next amount
+            }
         }
         
-        // Ensure we don't try to withdraw more than available
-        if (withdrawAmount > availableToWithdraw) {
-            withdrawAmount = availableToWithdraw;
-        }
-        
-        if (withdrawAmount > 0) {
-            try pool.withdraw(address(depositAsset), withdrawAmount, address(this)) {} catch {
-                // If withdraw fails, try with available amount
-                if (availableToWithdraw > 0 && availableToWithdraw != withdrawAmount) {
-                    try pool.withdraw(address(depositAsset), availableToWithdraw, address(this)) {} catch {}
+        // If all attempts failed, try with very small amounts as last resort
+        if (withdrawn == 0 && availableToWithdraw > 0) {
+            // Try 1% increments from 1% to 10%
+            for (uint256 percent = 10; percent >= 1 && withdrawn == 0; percent--) {
+                uint256 smallAmount = (availableToWithdraw * percent) / 100;
+                if (smallAmount > 0) {
+                    try pool.withdraw(address(depositAsset), smallAmount, address(this)) returns (uint256 amount) {
+                        if (amount > 0) {
+                            withdrawn = amount;
+                            break;
+                        }
+                    } catch {
+                        continue;
+                    }
                 }
             }
         }

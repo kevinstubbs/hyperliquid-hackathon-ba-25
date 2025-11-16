@@ -39,23 +39,31 @@ export default function Home() {
     hash: approveHash,
   });
 
-  const { isLoading: isDepositing } = useWaitForTransactionReceipt({
+  const { isLoading: isDepositing, isSuccess: isDepositSuccess } = useWaitForTransactionReceipt({
     hash: depositHash,
-    onSuccess: () => {
+  });
+
+  const { isLoading: isWithdrawing, isSuccess: isWithdrawSuccess } = useWaitForTransactionReceipt({
+    hash: withdrawHash,
+  });
+
+  // Handle deposit success
+  useEffect(() => {
+    if (isDepositSuccess) {
       refetchPosition();
       refetchStats();
       setDepositAmount('');
-    },
-  });
+    }
+  }, [isDepositSuccess, refetchPosition, refetchStats]);
 
-  const { isLoading: isWithdrawing } = useWaitForTransactionReceipt({
-    hash: withdrawHash,
-    onSuccess: () => {
+  // Handle withdraw success
+  useEffect(() => {
+    if (isWithdrawSuccess) {
       refetchPosition();
       refetchStats();
       setWithdrawShares('');
-    },
-  });
+    }
+  }, [isWithdrawSuccess, refetchPosition, refetchStats]);
 
   const handleDeposit = async () => {
     if (!depositAmount || !address) return;
