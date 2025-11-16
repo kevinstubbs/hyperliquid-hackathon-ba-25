@@ -11,6 +11,9 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.24.0
         version: 0.24.3
+      '@pppp606/ink-chart':
+        specifier: ^0.1.1
+        version: 0.1.1(ink@4.4.1(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)
       axios:
         specifier: ^1.6.0
         version: 1.13.2
@@ -171,6 +174,13 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@pppp606/ink-chart@0.1.1':
+    resolution: {integrity: sha512-iuJnx013aLBmhCER9GEC8/J+DtMnJWP68xbkGthHoN3vI7Lou6VEns64UvfxPZA+P33iADk0CDWnz4tRlX5Fww==}
+    hasBin: true
+    peerDependencies:
+      ink: '>=4'
+      react: '>=18'
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
@@ -2771,6 +2781,11 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
+
+  '@pppp606/ink-chart@0.1.1(ink@4.4.1(@types/react@18.3.26)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      ink: 4.4.1(@types/react@18.3.26)(react@18.3.1)
+      react: 18.3.1
 
   '@rtsao/scc@1.1.0': {}
 

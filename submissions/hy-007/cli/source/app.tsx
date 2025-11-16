@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useApp, useStdout } from 'ink';
+import { Sparkline } from '@pppp606/ink-chart';
 import Anthropic from '@anthropic-ai/sdk';
 import { getHyperliquidMetadata } from './tools/hyperliquid-metadata.js';
 import { getUserPosition } from './tools/user-position.js';
@@ -43,6 +44,73 @@ interface SizeType {
 	width: number;
 	height: number;
 }
+
+// Header component props
+type HeaderProps = {
+	timeUntilNext: number;
+	evaluationCount: number;
+	evaluationStatus: EvaluationStatus;
+	currentView: ViewType;
+	latestBalance: BalanceSnapshot | null;
+};
+
+// Shared Header Component
+const Header = ({
+	timeUntilNext,
+	evaluationCount,
+	evaluationStatus,
+	currentView,
+	latestBalance,
+}: HeaderProps) => {
+	return (
+		<Box
+			borderStyle="single"
+			borderBottom={true}
+			paddingX={1}
+			height={4}
+			flexDirection="column"
+		>
+			<Box>
+				<Text bold color="cyan">
+					Agent CLI
+				</Text>
+				<Text> - Auto-evaluating every 30s</Text>
+				{latestBalance && (
+					<Text color="green"> | Balance: {latestBalance.formatted}</Text>
+				)}
+			</Box>
+			<Box>
+				<Text color="gray">
+					Next evaluation in: {timeUntilNext}s | Evaluations: {evaluationCount} |
+					Status:{' '}
+					{evaluationStatus === 'evaluating' ? (
+						<Text color="yellow">Evaluating...</Text>
+					) : (
+						<Text color="green">Idle</Text>
+					)}
+				</Text>
+			</Box>
+			<Box>
+				<Text color="gray">
+					Views: {' '}
+					{['chat', 'balance', 'position', 'chart'].map((view, idx) => (
+						<Text key={view}>
+							{idx > 0 && ' | '}
+							{currentView === view ? (
+								<Text bold color="cyan">
+									[{view.toUpperCase()}]
+								</Text>
+							) : (
+								<Text>{view}</Text>
+							)}
+						</Text>
+					))}
+					<Text> | Press TAB to switch</Text>
+				</Text>
+			</Box>
+		</Box>
+	);
+};
 
 // Tool definitions for Anthropic API
 const getTools = (hasUserAddress: boolean, hasPrivateKey: boolean) => [
@@ -620,61 +688,6 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 		}
 	};
 
-	// Helper function to render a simple ASCII chart
-	const renderSimpleChart = (
-		values: number[],
-		timestamps: Date[],
-		width: number,
-		height: number,
-	): string => {
-		if (values.length === 0) return 'No data';
-		if (values.length === 1 && values[0] !== undefined) return `Value: ${values[0].toFixed(2)}`;
-
-		const min = Math.min(...values);
-		const max = Math.max(...values);
-		const range = max - min || 1; // Avoid division by zero
-
-		const chartWidth = Math.min(width, values.length);
-		const step = Math.max(1, Math.floor(values.length / chartWidth));
-		const sampledValues: number[] = [];
-		const sampledTimestamps: Date[] = [];
-
-		for (let i = 0; i < values.length; i += step) {
-			const val = values[i];
-			const ts = timestamps[i];
-			if (val !== undefined && ts !== undefined) {
-				sampledValues.push(val);
-				sampledTimestamps.push(ts);
-			}
-		}
-
-		if (sampledValues.length === 0) return 'No data';
-
-		// Create chart lines
-		const lines: string[] = [];
-		for (let row = height - 1; row >= 0; row--) {
-			const threshold = min + (range * row) / height;
-			let line = '';
-			for (let col = 0; col < sampledValues.length; col++) {
-				const val = sampledValues[col];
-				if (val !== undefined && val >= threshold) {
-					line += '*';
-				} else {
-					line += ' ';
-				}
-			}
-			lines.push(line);
-		}
-
-		// Add axis labels
-		const maxLabel = max.toFixed(2);
-		const minLabel = min.toFixed(2);
-		const maxLabelLine = `${maxLabel.padStart(8)} ${lines[0] || ''}`;
-		const minLabelLine = `${minLabel.padStart(8)} ${lines[lines.length - 1] || ''}`;
-
-		return [maxLabelLine, ...lines.slice(1, -1), minLabelLine].join('\n');
-	};
-
 	// Helper function to build system context with addresses (NEVER includes private keys)
 	const buildSystemContext = (): string => {
 		const contextParts: string[] = [];
@@ -1164,56 +1177,17 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 
 	return (
 		<Box flexDirection="column" width={width} height={height}>
-			{/* Header */}
-			<Box
-				borderStyle="single"
-				borderBottom={true}
-				paddingX={1}
-				height={4}
-				flexDirection="column"
-			>
-				<Box>
-					<Text bold color="cyan">
-						Agent CLI
-					</Text>
-					<Text> - Auto-evaluating every 30s</Text>
-					{latestBalance && (
-						<Text color="green"> | Balance: {latestBalance.formatted}</Text>
-					)}
-				</Box>
-				<Box>
-					<Text color="gray">
-						Next evaluation in: {timeUntilNext}s | Evaluations: {evaluationCount} |
-						Status:{' '}
-						{evaluationStatus === 'evaluating' ? (
-							<Text color="yellow">Evaluating...</Text>
-						) : (
-							<Text color="green">Idle</Text>
-						)}
-					</Text>
-				</Box>
-				<Box>
-					<Text color="gray">
-						Views: {' '}
-						{['chat', 'balance', 'position', 'chart'].map((view, idx) => (
-							<Text key={view}>
-								{idx > 0 && ' | '}
-								{currentView === view ? (
-									<Text bold color="cyan">
-										[{view.toUpperCase()}]
-									</Text>
-								) : (
-									<Text>{view}</Text>
-								)}
-							</Text>
-						))}
-						<Text> | Press TAB to switch</Text>
-					</Text>
-				</Box>
-			</Box>
+			{/* Header - visible on all tabs */}
+			<Header
+				timeUntilNext={timeUntilNext}
+				evaluationCount={evaluationCount}
+				evaluationStatus={evaluationStatus}
+				currentView={currentView}
+				latestBalance={latestBalance}
+			/>
 
 			{/* Main content area - different views */}
-			<Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1} width="100%">
+			<Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1} width="100%" minHeight={1}>
 				{currentView === 'chat' && (
 					<>
 						{visibleMessages.map(message => {
@@ -1373,55 +1347,88 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 					<Box flexDirection="column" width="100%">
 						<Box marginBottom={1}>
 							<Text bold color="cyan">
-								Historical Position & Balance Chart
+								Historical Position & Balance Charts
 							</Text>
 						</Box>
 						{positionHistory.length > 0 || balanceHistory.length > 0 ? (
 							<Box flexDirection="column" paddingLeft={2}>
-								{/* Simple ASCII chart for balance */}
+								{/* Sparkline chart for balance */}
 								{balanceHistory.length > 0 && (
 									<Box flexDirection="column" marginBottom={2}>
 										<Text bold>USDC Balance Over Time</Text>
 										<Box marginTop={1}>
-											<Text>
-												{renderSimpleChart(
-													balanceHistory.map(b => parseFloat(b.balance)),
-													balanceHistory.map(b => b.timestamp),
-													width - 10,
-													10,
-												)}
+											<Sparkline
+												data={balanceHistory.map(b => parseFloat(b.balance))}
+												width={Math.min(width - 20, 60)}
+												colorScheme="green"
+											/>
+										</Box>
+										<Box marginTop={1}>
+											<Text color="gray">
+												Min: {Math.min(...balanceHistory.map(b => parseFloat(b.balance))).toFixed(2)} |{' '}
+												Max: {Math.max(...balanceHistory.map(b => parseFloat(b.balance))).toFixed(2)} |{' '}
+												Current: {balanceHistory[balanceHistory.length - 1]?.balance || '0'}
 											</Text>
 										</Box>
 									</Box>
 								)}
-								{/* Simple ASCII chart for net value */}
+								{/* Sparkline chart for net value */}
 								{positionHistory.length > 0 && (
 									<Box flexDirection="column" marginBottom={2}>
 										<Text bold>Net Value Over Time</Text>
 										<Box marginTop={1}>
-											<Text>
-												{renderSimpleChart(
-													positionHistory.map(p => parseFloat(p.netValue)),
-													positionHistory.map(p => p.timestamp),
-													width - 10,
-													10,
-												)}
+											<Sparkline
+												data={positionHistory.map(p => parseFloat(p.netValue))}
+												width={Math.min(width - 20, 60)}
+												colorScheme="blue"
+											/>
+										</Box>
+										<Box marginTop={1}>
+											<Text color="gray">
+												Min: {Math.min(...positionHistory.map(p => parseFloat(p.netValue))).toFixed(2)} |{' '}
+												Max: {Math.max(...positionHistory.map(p => parseFloat(p.netValue))).toFixed(2)} |{' '}
+												Current: {positionHistory[positionHistory.length - 1]?.netValue || '0'} USDC
 											</Text>
 										</Box>
 									</Box>
 								)}
-								{/* Simple ASCII chart for health factor */}
+								{/* Sparkline chart for health factor */}
 								{positionHistory.length > 0 && (
-									<Box flexDirection="column">
+									<Box flexDirection="column" marginBottom={2}>
 										<Text bold>Health Factor Over Time</Text>
 										<Box marginTop={1}>
-											<Text>
-												{renderSimpleChart(
-													positionHistory.map(p => parseFloat(p.healthFactor)),
-													positionHistory.map(p => p.timestamp),
-													width - 10,
-													10,
-												)}
+											<Sparkline
+												data={positionHistory.map(p => parseFloat(p.healthFactor))}
+												width={Math.min(width - 20, 60)}
+												colorScheme="red"
+												threshold={[1.0, 1.2, 1.5, 2.0]}
+											/>
+										</Box>
+										<Box marginTop={1}>
+											<Text color="gray">
+												Min: {Math.min(...positionHistory.map(p => parseFloat(p.healthFactor))).toFixed(2)} |{' '}
+												Max: {Math.max(...positionHistory.map(p => parseFloat(p.healthFactor))).toFixed(2)} |{' '}
+												Current: {positionHistory[positionHistory.length - 1]?.healthFactor || '0'}
+											</Text>
+										</Box>
+									</Box>
+								)}
+								{/* Sparkline chart for LTV */}
+								{positionHistory.length > 0 && (
+									<Box flexDirection="column">
+										<Text bold>Current LTV Over Time</Text>
+										<Box marginTop={1}>
+										<Sparkline
+											data={positionHistory.map(p => parseFloat(p.currentLTV.replace('%', '')))}
+											width={Math.min(width - 20, 60)}
+											colorScheme="green"
+										/>
+										</Box>
+										<Box marginTop={1}>
+											<Text color="gray">
+												Min: {Math.min(...positionHistory.map(p => parseFloat(p.currentLTV.replace('%', '')))).toFixed(2)}% |{' '}
+												Max: {Math.max(...positionHistory.map(p => parseFloat(p.currentLTV.replace('%', '')))).toFixed(2)}% |{' '}
+												Current: {positionHistory[positionHistory.length - 1]?.currentLTV || '0%'}
 											</Text>
 										</Box>
 									</Box>
