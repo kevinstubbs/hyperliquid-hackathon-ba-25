@@ -1,4 +1,4 @@
-import { createWalletClient, createPublicClient, http, formatUnits } from 'viem';
+import { createWalletClient, createPublicClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 // Vault ABI for withdrawAll
@@ -21,7 +21,6 @@ export async function withdrawAll(
 	vaultAddress: string,
 	privateKey: string,
 	rpcUrl: string,
-	usdcAddress: string,
 ): Promise<string> {
 	try {
 		// Validate addresses

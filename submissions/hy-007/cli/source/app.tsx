@@ -19,6 +19,26 @@ type Message = {
 
 type EvaluationStatus = 'idle' | 'evaluating' | 'complete';
 
+type ViewType = 'chat' | 'balance' | 'position' | 'chart';
+
+type PositionSnapshot = {
+	timestamp: Date;
+	shares: string;
+	underlyingAssets: string;
+	collateralValue: string;
+	debtValue: string;
+	netValue: string;
+	healthFactor: string;
+	currentLTV: string;
+	leverageRatio: string;
+};
+
+type BalanceSnapshot = {
+	timestamp: Date;
+	balance: string;
+	formatted: string;
+};
+
 interface SizeType {
 	width: number;
 	height: number;
@@ -166,6 +186,11 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 	);
 	const [isWaitingForAddress, setIsWaitingForAddress] = useState(!userAddress);
 	const [scrollOffset, setScrollOffset] = useState(0);
+	const [currentView, setCurrentView] = useState<ViewType>('chat');
+	const [positionHistory, setPositionHistory] = useState<PositionSnapshot[]>([]);
+	const [balanceHistory, setBalanceHistory] = useState<BalanceSnapshot[]>([]);
+	const [latestPosition, setLatestPosition] = useState<PositionSnapshot | null>(null);
+	const [latestBalance, setLatestBalance] = useState<BalanceSnapshot | null>(null);
 	const anthropicRef = useRef<Anthropic | null>(null);
 	const evaluationTimerRef = useRef<NodeJS.Timeout | null>(null);
 	const lastEvaluationTimeRef = useRef<Date>(new Date());
@@ -326,6 +351,7 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 
 				try {
 					const result = await getUserPosition(vaultAddress, userAddress, rpcUrl);
+					parseAndStorePosition(result);
 					toolResults.push({
 						type: 'tool_result' as const,
 						tool_use_id: toolCall.id,
@@ -358,6 +384,7 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 
 				try {
 					const result = await getUSDCBalance(usdcAddress, userAddress, rpcUrl);
+					parseAndStoreBalance(result);
 					toolResults.push({
 						type: 'tool_result' as const,
 						tool_use_id: toolCall.id,
@@ -532,7 +559,7 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 				setMessages(prev => [...prev, toolMessage]);
 
 				try {
-					const result = await withdrawAll(vaultAddress, privateKey, rpcUrl, usdcAddress);
+					const result = await withdrawAll(vaultAddress, privateKey, rpcUrl);
 					toolResults.push({
 						type: 'tool_result' as const,
 						tool_use_id: toolCall.id,
@@ -551,10 +578,107 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 		return toolResults;
 	};
 
+	// Helper function to parse and store position data
+	const parseAndStorePosition = (result: string) => {
+		try {
+			const parsed = JSON.parse(result);
+			if (parsed.shares !== undefined) {
+				const snapshot: PositionSnapshot = {
+					timestamp: new Date(),
+					shares: parsed.shares || '0',
+					underlyingAssets: parsed.underlyingAssets || '0',
+					collateralValue: parsed.collateralValue || '0',
+					debtValue: parsed.debtValue || '0',
+					netValue: parsed.netValue || '0',
+					healthFactor: parsed.healthFactor || '0',
+					currentLTV: parsed.currentLTV || '0%',
+					leverageRatio: parsed.leverageRatio || '0x',
+				};
+				setLatestPosition(snapshot);
+				setPositionHistory(prev => [...prev, snapshot].slice(-100)); // Keep last 100 snapshots
+			}
+		} catch {
+			// Ignore parse errors
+		}
+	};
+
+	// Helper function to parse and store balance data
+	const parseAndStoreBalance = (result: string) => {
+		try {
+			const parsed = JSON.parse(result);
+			if (parsed.balance !== undefined) {
+				const snapshot: BalanceSnapshot = {
+					timestamp: new Date(),
+					balance: parsed.balance || '0',
+					formatted: parsed.formatted || '0 USDC',
+				};
+				setLatestBalance(snapshot);
+				setBalanceHistory(prev => [...prev, snapshot].slice(-100)); // Keep last 100 snapshots
+			}
+		} catch {
+			// Ignore parse errors
+		}
+	};
+
+	// Helper function to render a simple ASCII chart
+	const renderSimpleChart = (
+		values: number[],
+		timestamps: Date[],
+		width: number,
+		height: number,
+	): string => {
+		if (values.length === 0) return 'No data';
+		if (values.length === 1 && values[0] !== undefined) return `Value: ${values[0].toFixed(2)}`;
+
+		const min = Math.min(...values);
+		const max = Math.max(...values);
+		const range = max - min || 1; // Avoid division by zero
+
+		const chartWidth = Math.min(width, values.length);
+		const step = Math.max(1, Math.floor(values.length / chartWidth));
+		const sampledValues: number[] = [];
+		const sampledTimestamps: Date[] = [];
+
+		for (let i = 0; i < values.length; i += step) {
+			const val = values[i];
+			const ts = timestamps[i];
+			if (val !== undefined && ts !== undefined) {
+				sampledValues.push(val);
+				sampledTimestamps.push(ts);
+			}
+		}
+
+		if (sampledValues.length === 0) return 'No data';
+
+		// Create chart lines
+		const lines: string[] = [];
+		for (let row = height - 1; row >= 0; row--) {
+			const threshold = min + (range * row) / height;
+			let line = '';
+			for (let col = 0; col < sampledValues.length; col++) {
+				const val = sampledValues[col];
+				if (val !== undefined && val >= threshold) {
+					line += '*';
+				} else {
+					line += ' ';
+				}
+			}
+			lines.push(line);
+		}
+
+		// Add axis labels
+		const maxLabel = max.toFixed(2);
+		const minLabel = min.toFixed(2);
+		const maxLabelLine = `${maxLabel.padStart(8)} ${lines[0] || ''}`;
+		const minLabelLine = `${minLabel.padStart(8)} ${lines[lines.length - 1] || ''}`;
+
+		return [maxLabelLine, ...lines.slice(1, -1), minLabelLine].join('\n');
+	};
+
 	// Helper function to build system context with addresses (NEVER includes private keys)
 	const buildSystemContext = (): string => {
 		const contextParts: string[] = [];
-		
+
 		if (userAddress) {
 			contextParts.push(`User address: ${userAddress}`);
 		}
@@ -564,7 +688,7 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 		if (usdcAddress) {
 			contextParts.push(`USDC address: ${usdcAddress}`);
 		}
-		
+
 		if (contextParts.length > 0) {
 			return `Configuration:\n${contextParts.join('\n')}\n\n`;
 		}
@@ -692,7 +816,7 @@ IMPORTANT: Always query live blockchain data using the available tools. Never re
 			const errorMessage: Message = {
 				id: `eval-error-${Date.now()}`,
 				type: 'evaluation',
-					content: `[ERROR] Evaluation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+				content: `[ERROR] Evaluation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
 				timestamp: new Date(),
 			};
 
@@ -749,23 +873,23 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 
 			const conversationMessages: any[] = systemMessage
 				? [
-						{
-							role: 'user' as const,
-							content: systemMessage,
-						},
-						...conversationHistory,
-						{
-							role: 'user' as const,
-							content: currentInput,
-						},
-					]
+					{
+						role: 'user' as const,
+						content: systemMessage,
+					},
+					...conversationHistory,
+					{
+						role: 'user' as const,
+						content: currentInput,
+					},
+				]
 				: [
-						...conversationHistory,
-						{
-							role: 'user' as const,
-							content: currentInput,
-						},
-					];
+					...conversationHistory,
+					{
+						role: 'user' as const,
+						content: currentInput,
+					},
+				];
 
 			// Call Anthropic API with tool support
 			const toolsList = getTools(!!userAddress, !!privateKey);
@@ -980,6 +1104,18 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 			}
 		}
 
+		// Handle tab key to switch views (only when not waiting for address)
+		if (!isWaitingForAddress && key.tab) {
+			const views: ViewType[] = ['chat', 'balance', 'position', 'chart'];
+			const currentIndex = views.indexOf(currentView);
+			const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % views.length : 0;
+			const nextView = views[nextIndex];
+			if (nextView) {
+				setCurrentView(nextView);
+			}
+			return;
+		}
+
 		// Ignore other special keys
 		if (key.ctrl || key.meta || key.leftArrow || key.rightArrow) {
 			return;
@@ -1033,7 +1169,7 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 				borderStyle="single"
 				borderBottom={true}
 				paddingX={1}
-				height={3}
+				height={4}
 				flexDirection="column"
 			>
 				<Box>
@@ -1041,6 +1177,9 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 						Agent CLI
 					</Text>
 					<Text> - Auto-evaluating every 30s</Text>
+					{latestBalance && (
+						<Text color="green"> | Balance: {latestBalance.formatted}</Text>
+					)}
 				</Box>
 				<Box>
 					<Text color="gray">
@@ -1051,46 +1190,248 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 						) : (
 							<Text color="green">Idle</Text>
 						)}
-						{canScrollUp && (
-							<Text color="gray"> | [UP] Scroll up</Text>
-						)}
-						{canScrollDown && (
-							<Text color="gray"> | [DOWN] Scroll down</Text>
-						)}
-						{actualScrollOffset > 0 && (
-							<Text color="gray"> | Scroll: {actualScrollOffset}/{maxScroll}</Text>
-						)}
+					</Text>
+				</Box>
+				<Box>
+					<Text color="gray">
+						Views: {' '}
+						{['chat', 'balance', 'position', 'chart'].map((view, idx) => (
+							<Text key={view}>
+								{idx > 0 && ' | '}
+								{currentView === view ? (
+									<Text bold color="cyan">
+										[{view.toUpperCase()}]
+									</Text>
+								) : (
+									<Text>{view}</Text>
+								)}
+							</Text>
+						))}
+						<Text> | Press TAB to switch</Text>
 					</Text>
 				</Box>
 			</Box>
 
-			{/* Messages area */}
+			{/* Main content area - different views */}
 			<Box flexDirection="column" flexGrow={1} paddingX={1} paddingY={1} width="100%">
-				{visibleMessages.map(message => {
-					const isEvaluation = message.type === 'evaluation';
-					const isUser = message.type === 'user';
-					const color = isEvaluation
-						? 'yellow'
-						: isUser
-							? 'blue'
-							: 'white';
+				{currentView === 'chat' && (
+					<>
+						{visibleMessages.map(message => {
+							const isEvaluation = message.type === 'evaluation';
+							const isUser = message.type === 'user';
+							const color = isEvaluation
+								? 'yellow'
+								: isUser
+									? 'blue'
+									: 'white';
 
-					return (
-						<Box key={message.id} marginBottom={1} flexDirection="column" width="100%">
+							return (
+								<Box key={message.id} marginBottom={1} flexDirection="column" width="100%">
+									<Box>
+										<Text color={color} bold={isEvaluation}>
+											{isEvaluation ? '[EVAL]' : isUser ? '[YOU]' : '[AGENT]'}:{' '}
+										</Text>
+									</Box>
+									<Box paddingLeft={2} width="100%">
+										<Text wrap="wrap">{message.content}</Text>
+									</Box>
+								</Box>
+							);
+						})}
+						{isTyping && (
 							<Box>
-								<Text color={color} bold={isEvaluation}>
-									{isEvaluation ? '[EVAL]' : isUser ? '[YOU]' : '[AGENT]'}:{' '}
-								</Text>
+								<Text color="gray">[AGENT] Agent is typing...</Text>
 							</Box>
-							<Box paddingLeft={2} width="100%">
-								<Text wrap="wrap">{message.content}</Text>
+						)}
+						{canScrollUp && (
+							<Box>
+								<Text color="gray">[UP] Scroll up</Text>
 							</Box>
+						)}
+						{canScrollDown && (
+							<Box>
+								<Text color="gray">[DOWN] Scroll down</Text>
+							</Box>
+						)}
+						{actualScrollOffset > 0 && (
+							<Box>
+								<Text color="gray">Scroll: {actualScrollOffset}/{maxScroll}</Text>
+							</Box>
+						)}
+					</>
+				)}
+				{currentView === 'balance' && (
+					<Box flexDirection="column" width="100%">
+						<Box marginBottom={1}>
+							<Text bold color="cyan">
+								USDC Balance Information
+							</Text>
 						</Box>
-					);
-				})}
-				{isTyping && (
-					<Box>
-						<Text color="gray">[AGENT] Agent is typing...</Text>
+						{latestBalance ? (
+							<Box flexDirection="column" paddingLeft={2}>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Current Balance:</Text> {latestBalance.formatted}
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Raw Balance:</Text> {latestBalance.balance}
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Last Updated:</Text>{' '}
+										{latestBalance.timestamp.toLocaleString()}
+									</Text>
+								</Box>
+								<Box marginTop={1}>
+									<Text>
+										<Text bold>History Points:</Text> {balanceHistory.length}
+									</Text>
+								</Box>
+							</Box>
+						) : (
+							<Box paddingLeft={2}>
+								<Text color="gray">No balance data available yet. Balance will appear after first check.</Text>
+							</Box>
+						)}
+					</Box>
+				)}
+				{currentView === 'position' && (
+					<Box flexDirection="column" width="100%">
+						<Box marginBottom={1}>
+							<Text bold color="cyan">
+								Vault Position Information
+							</Text>
+						</Box>
+						{latestPosition ? (
+							<Box flexDirection="column" paddingLeft={2}>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Shares:</Text> {latestPosition.shares}
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Underlying Assets:</Text> {latestPosition.underlyingAssets} USDC
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Collateral Value:</Text> ${latestPosition.collateralValue}
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Debt Value:</Text> ${latestPosition.debtValue}
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Net Value:</Text> {latestPosition.netValue} USDC
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Health Factor:</Text>{' '}
+										<Text color={parseFloat(latestPosition.healthFactor) < 1.0 ? 'red' : 'green'}>
+											{latestPosition.healthFactor}
+										</Text>
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Current LTV:</Text> {latestPosition.currentLTV}
+									</Text>
+								</Box>
+								<Box marginBottom={1}>
+									<Text>
+										<Text bold>Leverage Ratio:</Text> {latestPosition.leverageRatio}
+									</Text>
+								</Box>
+								<Box marginTop={1}>
+									<Text>
+										<Text bold>Last Updated:</Text>{' '}
+										{latestPosition.timestamp.toLocaleString()}
+									</Text>
+								</Box>
+								<Box marginTop={1}>
+									<Text>
+										<Text bold>History Points:</Text> {positionHistory.length}
+									</Text>
+								</Box>
+							</Box>
+						) : (
+							<Box paddingLeft={2}>
+								<Text color="gray">No position data available yet. Position will appear after first check.</Text>
+							</Box>
+						)}
+					</Box>
+				)}
+				{currentView === 'chart' && (
+					<Box flexDirection="column" width="100%">
+						<Box marginBottom={1}>
+							<Text bold color="cyan">
+								Historical Position & Balance Chart
+							</Text>
+						</Box>
+						{positionHistory.length > 0 || balanceHistory.length > 0 ? (
+							<Box flexDirection="column" paddingLeft={2}>
+								{/* Simple ASCII chart for balance */}
+								{balanceHistory.length > 0 && (
+									<Box flexDirection="column" marginBottom={2}>
+										<Text bold>USDC Balance Over Time</Text>
+										<Box marginTop={1}>
+											<Text>
+												{renderSimpleChart(
+													balanceHistory.map(b => parseFloat(b.balance)),
+													balanceHistory.map(b => b.timestamp),
+													width - 10,
+													10,
+												)}
+											</Text>
+										</Box>
+									</Box>
+								)}
+								{/* Simple ASCII chart for net value */}
+								{positionHistory.length > 0 && (
+									<Box flexDirection="column" marginBottom={2}>
+										<Text bold>Net Value Over Time</Text>
+										<Box marginTop={1}>
+											<Text>
+												{renderSimpleChart(
+													positionHistory.map(p => parseFloat(p.netValue)),
+													positionHistory.map(p => p.timestamp),
+													width - 10,
+													10,
+												)}
+											</Text>
+										</Box>
+									</Box>
+								)}
+								{/* Simple ASCII chart for health factor */}
+								{positionHistory.length > 0 && (
+									<Box flexDirection="column">
+										<Text bold>Health Factor Over Time</Text>
+										<Box marginTop={1}>
+											<Text>
+												{renderSimpleChart(
+													positionHistory.map(p => parseFloat(p.healthFactor)),
+													positionHistory.map(p => p.timestamp),
+													width - 10,
+													10,
+												)}
+											</Text>
+										</Box>
+									</Box>
+								)}
+							</Box>
+						) : (
+							<Box paddingLeft={2}>
+								<Text color="gray">No historical data available yet. Charts will appear as data is collected.</Text>
+							</Box>
+						)}
 					</Box>
 				)}
 			</Box>
@@ -1107,7 +1448,7 @@ IMPORTANT: Always query live blockchain data using the available tools (get_user
 					<Text color="gray">
 						{isWaitingForAddress
 							? 'Enter your wallet address (0x...):'
-							: 'Type your message (Enter to send, ESC to exit):'}
+							: 'Type your message (Enter to send, TAB to switch views, ESC to exit):'}
 					</Text>
 				</Box>
 				<Box>
