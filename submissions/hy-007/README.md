@@ -1,6 +1,9 @@
-# HypurrFi Leveraged Vault
+# HY-007
 
-A leveraged yield vault that integrates with HypurrFi's lending protocol to automatically loop deposits for maximum yield.
+Team/Author: Kevin Stubbs
+
+## What is it
+A HypurrFi Leveraged Vault controlled by an agentic CLI. An agent burdened with glorious purpose.
 
 ## Features
 

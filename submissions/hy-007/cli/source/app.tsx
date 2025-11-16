@@ -6,6 +6,8 @@ import { getUserPosition } from './tools/user-position.js';
 import { getUSDCBalance } from './tools/usdc-balance.js';
 import { prepareDeposit } from './tools/prepare-deposit.js';
 import { executeDeposit } from './tools/execute-deposit.js';
+import { rebalance } from './tools/rebalance.js';
+import { withdrawAll } from './tools/withdraw-all.js';
 import { MAX_TOKENS, EVALUATION_INTERVAL_MS } from './constants.js';
 
 type Message = {
@@ -37,7 +39,7 @@ const getTools = (hasUserAddress: boolean, hasPrivateKey: boolean) => [
 		? [
 			{
 				name: 'get_user_position',
-				description: 'Gets the user\'s CURRENT position in the HypurrFiVault by querying live blockchain data. Returns shares, collateral, debt, health factor, LTV, and leverage ratio. ALWAYS use this tool to check the user\'s current position status - never rely on chat history or assumptions. If shares are 0, the user has no position.',
+				description: 'CHECK BALANCE: Gets the user\'s CURRENT position in the HypurrFiVault by querying live blockchain data. Returns shares, collateral, debt, health factor, LTV, and leverage ratio. This is a READ-ONLY query - it does not perform any actions. ALWAYS use this tool to check the user\'s current position status - never rely on chat history or assumptions. If shares are 0, the user has no position.',
 				input_schema: {
 					type: 'object' as const,
 					properties: {},
@@ -46,7 +48,7 @@ const getTools = (hasUserAddress: boolean, hasPrivateKey: boolean) => [
 			},
 			{
 				name: 'get_usdc_balance',
-				description: 'Gets the user\'s CURRENT USDC token balance by querying live blockchain data. ALWAYS use this tool to check how much USDC the user has available - never rely on chat history or assumptions about previous transactions.',
+				description: 'CHECK BALANCE: Gets the user\'s CURRENT USDC token balance by querying live blockchain data. This is a READ-ONLY query - it does not perform any actions. ALWAYS use this tool to check how much USDC the user has available - never rely on chat history or assumptions about previous transactions.',
 				input_schema: {
 					type: 'object' as const,
 					properties: {},
@@ -57,7 +59,7 @@ const getTools = (hasUserAddress: boolean, hasPrivateKey: boolean) => [
 				? [
 					{
 						name: 'execute_deposit',
-						description: 'Automatically executes a deposit into the vault. This will approve USDC spending and deposit the specified amount. Use this when the user wants to deposit USDC into the vault. Provide the amount in USDC (e.g., "100" for 100 USDC).',
+						description: 'DEPOSIT: Executes a deposit into the vault. This will approve USDC spending and deposit the specified amount. CRITICAL: Only use this when the user EXPLICITLY requests to deposit funds. NEVER deposit without explicit user consent. Provide the amount in USDC (e.g., "100" for 100 USDC).',
 						input_schema: {
 							type: 'object' as const,
 							properties: {
@@ -67,6 +69,24 @@ const getTools = (hasUserAddress: boolean, hasPrivateKey: boolean) => [
 								},
 							},
 							required: ['amount'],
+						},
+					},
+					{
+						name: 'rebalance',
+						description: 'REBALANCE: Adjusts the vault position to maintain target LTV and health factor. This can be called automatically when the position needs adjustment (e.g., health factor is low, LTV has drifted). You can call this proactively to maintain optimal position health. This does NOT require explicit user consent - it is a maintenance operation.',
+						input_schema: {
+							type: 'object' as const,
+							properties: {},
+							required: [],
+						},
+					},
+					{
+						name: 'withdraw_all',
+						description: 'WITHDRAW ALL: Withdraws all user shares from the vault (full exit). This exits the entire position and returns underlying assets. CRITICAL: Only use this when the user EXPLICITLY requests to withdraw all funds or exit their position. NEVER withdraw without explicit user consent.',
+						input_schema: {
+							type: 'object' as const,
+							properties: {},
+							required: [],
 						},
 					},
 				]
@@ -443,6 +463,88 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 						content: formatError(error, toolCall.name),
 					});
 				}
+			} else if (toolCall.name === 'rebalance') {
+				if (!vaultAddress) {
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: 'Error: Vault address must be configured to rebalance',
+					});
+					continue;
+				}
+
+				if (!privateKey) {
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: 'Error: Private key must be configured to rebalance. Set PRIVATE_KEY environment variable.',
+					});
+					continue;
+				}
+
+				const toolMessage: Message = {
+					id: `tool-${Date.now()}`,
+					type: 'evaluation',
+					content: `[TOOL] Using tool: rebalance`,
+					timestamp: new Date(),
+				};
+				setMessages(prev => [...prev, toolMessage]);
+
+				try {
+					const result = await rebalance(vaultAddress, privateKey, rpcUrl);
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: result,
+					});
+				} catch (error) {
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: formatError(error, toolCall.name),
+					});
+				}
+			} else if (toolCall.name === 'withdraw_all') {
+				if (!vaultAddress) {
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: 'Error: Vault address must be configured to withdraw',
+					});
+					continue;
+				}
+
+				if (!privateKey) {
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: 'Error: Private key must be configured to withdraw. Set PRIVATE_KEY environment variable.',
+					});
+					continue;
+				}
+
+				const toolMessage: Message = {
+					id: `tool-${Date.now()}`,
+					type: 'evaluation',
+					content: `[TOOL] Using tool: withdraw_all`,
+					timestamp: new Date(),
+				};
+				setMessages(prev => [...prev, toolMessage]);
+
+				try {
+					const result = await withdrawAll(vaultAddress, privateKey, rpcUrl, usdcAddress);
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: result,
+					});
+				} catch (error) {
+					toolResults.push({
+						type: 'tool_result' as const,
+						tool_use_id: toolCall.id,
+						content: formatError(error, toolCall.name),
+					});
+				}
 			}
 		}
 
@@ -491,7 +593,15 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 			const toolsList = getTools(!!userAddress, !!privateKey);
 			const systemContext = buildSystemContext();
 			const evaluationPrompt = userAddress
-				? `${systemContext}You are an autonomous agent that evaluates its current state and context. You have access to tools to fetch Hyperliquid token metadata, check the user's position in the vault, check their USDC balance, and execute deposit transactions. IMPORTANT: Always query live blockchain data using the available tools. Never rely on chat history or make assumptions about the user's position, balance, or transaction history. Always check the user's position first using get_user_position. If the user has no position (shares = 0), check their USDC balance using get_usdc_balance and offer to help them enter a position. Provide a brief evaluation of what you are observing from the live data. Keep it concise (1-2 sentences).`
+				? `${systemContext}You are an autonomous agent that evaluates its current state and context. You have access to tools to fetch Hyperliquid token metadata, check the user's position in the vault, check their USDC balance, execute deposit transactions, rebalance the vault, and withdraw all funds.
+
+CRITICAL RULES FOR TOOL USAGE:
+- CHECK BALANCE (get_user_position, get_usdc_balance): These are READ-ONLY queries. Use them freely to check current state.
+- REBALANCE (rebalance): You can call this automatically at any time to maintain optimal position health. This does NOT require user consent - it's a maintenance operation.
+- DEPOSIT (execute_deposit): ONLY use when the user EXPLICITLY requests to deposit funds. NEVER deposit without explicit user consent.
+- WITHDRAW ALL (withdraw_all): ONLY use when the user EXPLICITLY requests to withdraw all funds or exit their position. NEVER withdraw without explicit user consent.
+
+IMPORTANT: Always query live blockchain data using the available tools. Never rely on chat history or make assumptions about the user's position, balance, or transaction history. Always check the user's position first using get_user_position. If the user has no position (shares = 0), check their USDC balance using get_usdc_balance and offer to help them enter a position. If the position needs rebalancing (low health factor, LTV drift), you can proactively call rebalance. Provide a brief evaluation of what you are observing from the live data. Keep it concise (1-2 sentences).`
 				: `${systemContext}You are an autonomous agent that evaluates its current state and context. You have access to tools to fetch Hyperliquid token metadata if needed. Provide a brief evaluation of what you are observing or thinking about. Keep it concise (1-2 sentences).`;
 
 			const conversationMessages: any[] = [
@@ -523,11 +633,16 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 					const toolResults = await handleToolCalls(toolCalls);
 
 					// Display tool results directly to user for tools that return detailed status
-					// This ensures users see all status updates (especially for execute_deposit)
+					// This ensures users see all status updates (especially for execute_deposit, rebalance, withdraw_all)
 					for (const toolResult of toolResults) {
 						const toolCall = toolCalls.find(tc => tc.id === toolResult.tool_use_id);
-						// Display results for execute_deposit and any tool that returns multi-line output
-						if (toolCall?.name === 'execute_deposit' || toolResult.content.includes('\n')) {
+						// Display results for transaction tools and any tool that returns multi-line output
+						if (
+							toolCall?.name === 'execute_deposit' ||
+							toolCall?.name === 'rebalance' ||
+							toolCall?.name === 'withdraw_all' ||
+							toolResult.content.includes('\n')
+						) {
 							const resultMessage: Message = {
 								id: `tool-result-${Date.now()}-${toolResult.tool_use_id}`,
 								type: 'evaluation',
@@ -623,7 +738,13 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 			// Build system message with addresses and instructions (NEVER includes private keys)
 			const systemContext = buildSystemContext();
 			const systemMessage = userAddress
-				? `${systemContext}IMPORTANT: Always query live blockchain data using the available tools (get_user_position, get_usdc_balance, etc.). Never rely on chat history or make assumptions about the user's position, balance, or transaction history. Always verify current state by calling the appropriate tools before responding about positions, balances, or deposits.`
+				? `${systemContext}CRITICAL RULES FOR TOOL USAGE:
+- CHECK BALANCE (get_user_position, get_usdc_balance): These are READ-ONLY queries. Use them freely to check current state.
+- REBALANCE (rebalance): You can call this automatically at any time to maintain optimal position health. This does NOT require user consent - it's a maintenance operation.
+- DEPOSIT (execute_deposit): ONLY use when the user EXPLICITLY requests to deposit funds. NEVER deposit without explicit user consent.
+- WITHDRAW ALL (withdraw_all): ONLY use when the user EXPLICITLY requests to withdraw all funds or exit their position. NEVER withdraw without explicit user consent.
+
+IMPORTANT: Always query live blockchain data using the available tools (get_user_position, get_usdc_balance, etc.). Never rely on chat history or make assumptions about the user's position, balance, or transaction history. Always verify current state by calling the appropriate tools before responding about positions, balances, or deposits.`
 				: systemContext || undefined;
 
 			const conversationMessages: any[] = systemMessage
@@ -677,11 +798,16 @@ export default function App({ apiKey, userAddress: initialUserAddress, vaultAddr
 					const toolResults = await handleToolCalls(toolCalls);
 
 					// Display tool results directly to user for tools that return detailed status
-					// This ensures users see all status updates (especially for execute_deposit)
+					// This ensures users see all status updates (especially for execute_deposit, rebalance, withdraw_all)
 					for (const toolResult of toolResults) {
 						const toolCall = toolCalls.find(tc => tc.id === toolResult.tool_use_id);
-						// Display results for execute_deposit and any tool that returns multi-line output
-						if (toolCall?.name === 'execute_deposit' || toolResult.content.includes('\n')) {
+						// Display results for transaction tools and any tool that returns multi-line output
+						if (
+							toolCall?.name === 'execute_deposit' ||
+							toolCall?.name === 'rebalance' ||
+							toolCall?.name === 'withdraw_all' ||
+							toolResult.content.includes('\n')
+						) {
 							const resultMessage: Message = {
 								id: `tool-result-${Date.now()}-${toolResult.tool_use_id}`,
 								type: 'evaluation',
