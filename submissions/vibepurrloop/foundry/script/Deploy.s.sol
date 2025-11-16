@@ -38,6 +38,7 @@ contract DeployScript is Script {
         console2.log("");
 
         // Deploy vault
+        console2.log("Deploying vault contract...");
         HypurrFiVault vault = new HypurrFiVault(
             poolAddress,
             usdcAddress,      // depositAsset
@@ -46,9 +47,22 @@ contract DeployScript is Script {
             treasury
         );
 
+        // Log vault address immediately after deployment (before stopBroadcast)
+        // This ensures we have the address even if something fails later
+        console2.log("HypurrFiVault deployed at:", address(vault));
+        console2.log("");
+
         vm.stopBroadcast();
         
-        // Check balance after deployment
+        // Verify deployment by checking if contract has code
+        uint256 codeSize;
+        assembly {
+            codeSize := extcodesize(vault)
+        }
+        require(codeSize > 0, "Deployment failed: contract has no code");
+        console2.log("[OK] Deployment verified: contract has code");
+        
+        // Check balance after deployment (these are view calls, won't affect deployment)
         uint256 balanceAfter = usdc.balanceOf(testUser);
         console2.log("Test user USDC balance (after deployment):", balanceAfter / 1e6, "USDC");
         console2.log("");
@@ -60,8 +74,6 @@ contract DeployScript is Script {
             console2.log("      Or manually fund using cast commands (see deploy.sh for reference).");
             console2.log("");
         }
-
-        console2.log("HypurrFiVault deployed at:", address(vault));
         console2.log("");
         console2.log("Next steps:");
         console2.log("1. Update VAULT_ADDRESS in .env");

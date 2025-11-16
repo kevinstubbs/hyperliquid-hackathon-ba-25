@@ -16,6 +16,7 @@ const cli = meow(
 		--vault-address Vault contract address (or set VAULT_ADDRESS env var)
 		--rpc-url       RPC URL for blockchain (or set RPC_URL env var)
 		--usdc-address  USDC token address (or set USDC_ADDRESS env var)
+		--private-key   Private key for automatic transactions (or set PRIVATE_KEY env var)
 
 	Examples
 	  $ cli
@@ -44,6 +45,10 @@ const cli = meow(
 			usdcAddress: {
 				type: 'string',
 			},
+			privateKey: {
+				type: 'string',
+				alias: 'p',
+			},
 		},
 	},
 );
@@ -55,5 +60,6 @@ render(
 		vaultAddress={cli.flags.vaultAddress}
 		rpcUrl={cli.flags.rpcUrl}
 		usdcAddress={cli.flags.usdcAddress}
+		privateKey={cli.flags.privateKey}
 	/>,
 );
